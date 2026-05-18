@@ -60,6 +60,52 @@ ready to paste into an agent's context.
 
 ---
 
+## Integrating with an agent
+
+`semeja` is built to be driven by coding agents (Claude Code, Cursor, Codex,
+OpenCode, …) in place of `grep`. There are three ways to wire it in.
+
+### AGENTS.md / CLAUDE.md — manual, any agent
+
+Install `semeja` on your `PATH`, then paste the block below into your project's
+`AGENTS.md` (or `CLAUDE.md`). It tells the agent to reach for `semeja` before
+grepping — no other setup required:
+
+````md
+## Code search
+
+Use `semeja search` to find code by intent or by symbol name. It returns the
+relevant snippets directly, so prefer it over `grep`/`glob` and reading whole
+files:
+
+```bash
+semeja search "how is authentication handled" .
+semeja search "HybridRetriever" .
+```
+
+Use `semeja find-related <file_path> <line>` — with values taken from a search
+result — to find similar code elsewhere. Fall back to `grep` only when you need
+exhaustive literal matches.
+````
+
+### Claude Code sub-agent — automatic
+
+Run `semeja init` in the project root. It writes
+`.claude/agents/semeja-search.md`, a dedicated Claude Code sub-agent restricted
+to the `Bash` and `Read` tools that knows how to drive `semeja`. Claude Code
+then delegates code-search and exploration questions to it automatically.
+Re-run with `--force` to overwrite an existing file.
+
+### MCP
+
+`semeja` also implements the `search` and `find_related` tools as an MCP-style
+server with a cached index — see [MCP server](#mcp-server). The tool and cache
+logic are complete and tested; a stdio protocol transport for plugging into MCP
+clients is not bundled in this build, so for now the AGENTS.md or sub-agent
+route above is how you wire `semeja` into an agent.
+
+---
+
 ## How it works
 
 1. **Walk** the directory, honouring `.gitignore` and `.semejaignore` and
