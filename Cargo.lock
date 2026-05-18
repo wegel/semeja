@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "semeja"
-version = "0.1.8"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",

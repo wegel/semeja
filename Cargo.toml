@@ -1,6 +1,6 @@
 [package]
 name = "semeja"
-version = "0.1.8"
+version = "0.0.1"
 edition = "2021"
 description = "Fast and accurate code search for agents"
 license = "MIT"
