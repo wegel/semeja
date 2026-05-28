@@ -51,9 +51,11 @@ semeja savings [--verbose]
 - **`find-related`** — given a `file_path` and `line` from a prior result,
   return semantically similar code elsewhere in the repo.
 - **`-t` / `--model`** — which embedding model to use: `code` (default, for
-  source), `text` (for prose/docs; `-t` is shorthand for `--model text`), or
-  any Hugging Face `model2vec` name. See [Embedding models](#embedding-models).
-  Also settable via `SEMEJA_MODEL`.
+  source) or `text` (for prose/docs), or any Hugging Face `model2vec` name.
+  **`-t` is shorthand for `--model text` and also turns on
+  `--include-text-files`**, so `semeja search -t "<query>"` is all you need to
+  search docs. See [Embedding models](#embedding-models). Also settable via
+  `SEMEJA_MODEL`.
 - **`--include-text-files`** — also index documentation files (`.md`, `.txt`,
   `.rst`, `.yaml`, `.json`, …), which are skipped by default.
 - **`init`** — write `.claude/agents/semeja-search.md`, a Claude Code
@@ -149,10 +151,10 @@ point `semeja` at your own model.
 
 A single index uses one model — query and chunk embeddings must share an
 embedding space — so pick the model that matches the corpus. For documentation
-or knowledge-base search, pair `-t` with `--include-text-files`:
+or knowledge-base search, `-t` selects the text model *and* indexes doc files:
 
 ```bash
-semeja search "deployment rollback procedure" ./docs -t --include-text-files
+semeja search -t "deployment rollback procedure" ./docs
 ```
 
 ---

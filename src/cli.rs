@@ -177,7 +177,12 @@ impl Options {
                         options.model = value.clone();
                     }
                 }
-                "-t" | "--text" => options.model = "text".to_string(),
+                // The text-model shorthand also indexes documentation files,
+                // since prose search is pointless with them excluded.
+                "-t" | "--text" => {
+                    options.model = "text".to_string();
+                    options.include_text_files = true;
+                }
                 "--include-text-files" => options.include_text_files = true,
                 "--force" => options.force = true,
                 "--verbose" => options.verbose = true,
@@ -200,8 +205,9 @@ fn help_text() -> String {
         "  semeja init [--force]",
         "  semeja savings [--verbose]",
         "",
-        "Models: 'code' (default, for source), 'text' (-t, for prose/docs), or",
-        "any Hugging Face model2vec name via --model. Override with SEMEJA_MODEL.",
+        "Models: 'code' (default, for source), 'text' (for prose/docs), or any",
+        "Hugging Face model2vec name via --model. Override with SEMEJA_MODEL.",
+        "  -t  shorthand for the text model; also indexes documentation files.",
     ]
     .join("\n")
 }
