@@ -124,7 +124,9 @@ route above is how you wire `semeja` into an agent.
    skipping vendored/build directories.
 2. **Chunk** each file along syntax boundaries using
    [tree-sitter](https://tree-sitter.github.io/): functions and classes stay
-   intact rather than being cut at arbitrary line counts.
+   intact rather than being cut at arbitrary line counts. Markdown is chunked
+   by **section**, so each chunk leads with its heading and carries the text
+   that heading introduces.
 3. **Embed** every chunk with a `model2vec` static embedding model — a
    distilled, CPU-only model with no transformer inference at query time. The
    model is selectable (see [Embedding models](#embedding-models)).

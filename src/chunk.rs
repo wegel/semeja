@@ -6,8 +6,11 @@ use tree_sitter_language::LanguageFn;
 use crate::lang::all_languages;
 use crate::types::Chunk;
 
-/// Desired chunk length in characters.
+/// Desired chunk length in characters for source code.
 const DESIRED_CHUNK_LENGTH_CHARS: usize = 1500;
+/// Desired chunk length in characters for prose/Markdown — larger so whole
+/// document sections (heading plus body) usually stay in one chunk.
+const MARKDOWN_CHUNK_LENGTH_CHARS: usize = 3000;
 
 /// Bundled tree-sitter grammars, keyed by language name from [`crate::lang`].
 ///
@@ -106,9 +109,13 @@ pub fn chunk_source(source: &str, file_path: &str, language: Option<&str>) -> Ve
         return Vec::new();
     }
 
+    let desired = match language {
+        Some(lang) if is_markdown(lang) => MARKDOWN_CHUNK_LENGTH_CHARS,
+        _ => DESIRED_CHUNK_LENGTH_CHARS,
+    };
     let boundaries = match language {
-        Some(lang) if is_supported_language(lang) => chunk(source, lang, DESIRED_CHUNK_LENGTH_CHARS),
-        _ => chunk_lines(source, DESIRED_CHUNK_LENGTH_CHARS),
+        Some(lang) if is_supported_language(lang) => chunk(source, lang, desired),
+        _ => chunk_lines(source, desired),
     };
 
     let chars: Vec<char> = source.chars().collect();
@@ -158,7 +165,12 @@ pub fn chunk(text: &str, language: &str, desired_length: usize) -> Vec<ChunkBoun
     };
 
     // The algorithm works in byte offsets; convert to char offsets for callers.
-    chunk_node(tree.root_node(), desired_length)
+    let boundaries = if is_markdown(language) {
+        chunk_markdown(tree.root_node(), desired_length)
+    } else {
+        chunk_node(tree.root_node(), desired_length)
+    };
+    boundaries
         .into_iter()
         .map(|boundary| ChunkBoundary {
             start: text[..boundary.start].chars().count(),
@@ -181,6 +193,101 @@ fn parser_for(language: &str) -> Option<Parser> {
 fn chunk_node(node: Node, desired_length: usize) -> Vec<ChunkBoundary> {
     let raw = merge_node_inner(node, desired_length);
     merge_adjacent_chunks(&raw, desired_length)
+}
+
+/// Return true if the language is Markdown (chunked section-by-section).
+fn is_markdown(language: &str) -> bool {
+    language == "markdown" || language == "markdown_inline"
+}
+
+/// Return true if a node is a Markdown heading.
+fn is_heading(node: Node) -> bool {
+    node.kind() == "atx_heading" || node.kind() == "setext_heading"
+}
+
+/// Chunk Markdown so each chunk begins at a heading and carries its section.
+///
+/// tree-sitter-md nests `section` nodes (heading, body, nested sections). We
+/// flatten them into document order, then group greedily up to
+/// `desired_length`, starting a new chunk at each heading once the current one
+/// holds body text. This keeps a heading attached to the content it
+/// introduces instead of drifting onto the previous section.
+fn chunk_markdown(root: Node, desired_length: usize) -> Vec<ChunkBoundary> {
+    let mut units: Vec<Node> = Vec::new();
+    collect_markdown_units(root, &mut units);
+    if units.is_empty() {
+        return vec![ChunkBoundary { start: root.start_byte(), end: root.end_byte() }];
+    }
+    merge_markdown_units(&units, desired_length)
+}
+
+/// Flatten Markdown `section` nodes into an ordered list of headings and blocks.
+fn collect_markdown_units<'a>(node: Node<'a>, units: &mut Vec<Node<'a>>) {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "section" {
+            collect_markdown_units(child, units);
+        } else {
+            units.push(child);
+        }
+    }
+}
+
+/// Group heading/block units into heading-led chunks up to `desired_length`.
+fn merge_markdown_units(units: &[Node], desired_length: usize) -> Vec<ChunkBoundary> {
+    let mut groups: Vec<ChunkBoundary> = Vec::new();
+    let mut index = 0;
+    while index < units.len() {
+        let start = units[index].start_byte();
+        let mut end = units[index].end_byte();
+        let mut length = end - start;
+        let mut has_body = !is_heading(units[index]);
+        index += 1;
+
+        // An oversized leading block is split on its own syntax boundaries.
+        if length > desired_length {
+            groups.extend(merge_node_inner(units[index - 1], desired_length));
+            continue;
+        }
+
+        let mut emitted = false;
+        while index < units.len() {
+            let next = units[index];
+            let next_len = next.end_byte() - next.start_byte();
+            // A heading starts a new section once the current chunk has content.
+            if has_body && is_heading(next) {
+                break;
+            }
+            if length + next_len > desired_length {
+                // A chunk holding only heading(s) must still capture the content
+                // they introduce, even when it overflows the budget.
+                if !has_body {
+                    if next_len > desired_length {
+                        // Oversized block: split it; the heading leads its first piece.
+                        let mut pieces = merge_node_inner(next, desired_length);
+                        if let Some(first) = pieces.first_mut() {
+                            first.start = start;
+                        }
+                        groups.extend(pieces);
+                        emitted = true;
+                    } else {
+                        // Keep the first body block with its heading.
+                        end = next.end_byte();
+                    }
+                    index += 1;
+                }
+                break;
+            }
+            end = next.end_byte();
+            length += next_len;
+            has_body |= !is_heading(next);
+            index += 1;
+        }
+        if !emitted {
+            groups.push(ChunkBoundary { start, end });
+        }
+    }
+    groups
 }
 
 /// Recursively merge and split syntax-tree nodes into byte-offset chunks.

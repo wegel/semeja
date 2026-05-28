@@ -103,6 +103,24 @@ fn non_python_languages_chunk_along_syntax() {
 }
 
 #[test]
+fn markdown_chunks_lead_with_their_heading() {
+    let md = "# Top\n\n## Alpha\n\nalpha body text\n\n## Beta\n\nbeta body text\n";
+    let boundaries = chunk(md, "markdown", 24);
+    assert!(boundaries.len() >= 2, "small budget should split into sections");
+
+    let chars: Vec<char> = md.chars().collect();
+    let texts: Vec<String> =
+        boundaries.iter().map(|b| chars[b.start..b.end].iter().collect()).collect();
+
+    // Every chunk begins at a heading — none drift onto the previous section.
+    for text in &texts {
+        assert!(text.trim_start().starts_with('#'), "chunk must lead with a heading: {text:?}");
+    }
+    // The second section's heading leads its own chunk, with its body.
+    assert!(texts.iter().any(|t| t.trim_start().starts_with("## Beta") && t.contains("beta body")));
+}
+
+#[test]
 fn core_chunk_handles_leaf_node_exceeding_desired_length() {
     let long_var = "x".repeat(100);
     let code = format!("{long_var} = 1\n");
