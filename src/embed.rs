@@ -9,8 +9,12 @@ use crate::types::Chunk;
 /// Texts per parallel embedding batch.
 const EMBED_BATCH: usize = 64;
 
-/// Default embedding model, a distilled `model2vec` static model.
-pub const DEFAULT_MODEL_NAME: &str = "minishlab/potion-code-16M";
+/// Embedding model tuned for source code.
+pub const CODE_MODEL_NAME: &str = "minishlab/potion-code-16M";
+/// Embedding model tuned for natural-language retrieval (prose, docs).
+pub const TEXT_MODEL_NAME: &str = "minishlab/potion-retrieval-32M";
+/// The model used when no selector is given.
+pub const DEFAULT_MODEL_NAME: &str = CODE_MODEL_NAME;
 
 /// Dimensionality of the [`MockEncoder`].
 const MOCK_DIM: usize = 256;
@@ -38,12 +42,27 @@ impl Encoder for StaticModelEncoder {
     }
 }
 
-/// Load the embedding model, fetching it from the Hugging Face hub if needed.
+/// Resolve a model selector to a Hugging Face model name.
 ///
+/// The presets `"code"` and `"text"` map to the code and text models; any
+/// other value is treated as a Hugging Face repo name. `None` selects the
+/// default (code) model.
+pub fn resolve_model_name(selector: Option<&str>) -> &str {
+    match selector {
+        None | Some("code") => CODE_MODEL_NAME,
+        Some("text") => TEXT_MODEL_NAME,
+        Some(name) => name,
+    }
+}
+
+/// Load the embedding model for a selector, fetching it from the Hugging Face
+/// hub if needed.
+///
+/// Accepts the `"code"` / `"text"` presets or an explicit model name.
 /// Downloaded models are cached locally by `hf-hub`, so only the first call
 /// for a given model touches the network.
-pub fn load_model(model_path: Option<&str>) -> Result<Box<dyn Encoder>> {
-    let name = model_path.unwrap_or(DEFAULT_MODEL_NAME);
+pub fn load_model(selector: Option<&str>) -> Result<Box<dyn Encoder>> {
+    let name = resolve_model_name(selector);
     let model = StaticModel::from_pretrained(name, None, None, None)
         .with_context(|| format!("load embedding model {name:?}"))?;
     Ok(Box::new(StaticModelEncoder { model }))

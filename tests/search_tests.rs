@@ -3,7 +3,10 @@
 mod common;
 
 use common::make_chunk;
-use semeja::embed::{embed_chunks, load_model, CosineBackend, MockEncoder, DEFAULT_MODEL_NAME};
+use semeja::embed::{
+    embed_chunks, load_model, resolve_model_name, CosineBackend, MockEncoder, CODE_MODEL_NAME,
+    DEFAULT_MODEL_NAME, TEXT_MODEL_NAME,
+};
 use semeja::bm25::Bm25Index;
 use semeja::search::{search_bm25, search_hybrid, search_semantic, sort_top_k};
 use semeja::tokenize::tokenize;
@@ -130,8 +133,14 @@ fn sort_top_k_matches_descending_argsort() {
 }
 
 #[test]
-fn default_model_name_is_potion_code() {
+fn model_selectors_resolve_to_preset_names() {
     assert_eq!(DEFAULT_MODEL_NAME, "minishlab/potion-code-16M");
+    assert_eq!(CODE_MODEL_NAME, "minishlab/potion-code-16M");
+    assert_eq!(TEXT_MODEL_NAME, "minishlab/potion-retrieval-32M");
+    assert_eq!(resolve_model_name(None), CODE_MODEL_NAME);
+    assert_eq!(resolve_model_name(Some("code")), CODE_MODEL_NAME);
+    assert_eq!(resolve_model_name(Some("text")), TEXT_MODEL_NAME);
+    assert_eq!(resolve_model_name(Some("org/custom-model")), "org/custom-model");
 }
 
 /// Verifies the real model loads and embeds; ignored by default as it

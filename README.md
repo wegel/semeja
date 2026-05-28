@@ -39,8 +39,8 @@ and caches it locally; subsequent runs are offline.
 ## CLI
 
 ```
-semeja search <query> [path] [-k N] [-m MODE] [--include-text-files]
-semeja find-related <file_path> <line> [path] [-k N]
+semeja search <query> [path] [-k N] [-m MODE] [--model NAME] [--include-text-files]
+semeja find-related <file_path> <line> [path] [-k N] [--model NAME]
 semeja init [--force]
 semeja savings [--verbose]
 ```
@@ -50,6 +50,11 @@ semeja savings [--verbose]
   (default), `semantic`, or `bm25`.
 - **`find-related`** — given a `file_path` and `line` from a prior result,
   return semantically similar code elsewhere in the repo.
+- **`--model`** — which embedding model to use: `code` (default, for source),
+  `text` (for prose/docs), or any Hugging Face `model2vec` name. See
+  [Embedding models](#embedding-models). Also settable via `SEMEJA_MODEL`.
+- **`--include-text-files`** — also index documentation files (`.md`, `.txt`,
+  `.rst`, `.yaml`, `.json`, …), which are skipped by default.
 - **`init`** — write `.claude/agents/semeja-search.md`, a Claude Code
   sub-agent definition that teaches an agent to use `semeja` instead of grep.
 - **`savings`** — report how many tokens `semeja` has saved versus reading
@@ -113,9 +118,9 @@ route above is how you wire `semeja` into an agent.
 2. **Chunk** each file along syntax boundaries using
    [tree-sitter](https://tree-sitter.github.io/): functions and classes stay
    intact rather than being cut at arbitrary line counts.
-3. **Embed** every chunk with a `model2vec` static embedding model
-   (`minishlab/potion-code-16M`) — a distilled, CPU-only model with no
-   transformer inference at query time.
+3. **Embed** every chunk with a `model2vec` static embedding model — a
+   distilled, CPU-only model with no transformer inference at query time. The
+   model is selectable (see [Embedding models](#embedding-models)).
 4. **Index** the chunks into a BM25 lexical index and a cosine-similarity
    vector index.
 5. **Search** by fusing both rankings with reciprocal-rank fusion, then
@@ -124,6 +129,29 @@ route above is how you wire `semeja` into an agent.
 
 The blend weight adapts to the query: symbol-like queries lean on BM25,
 natural-language queries balance both.
+
+---
+
+## Embedding models
+
+`semeja` ships with two `model2vec` static embedding models — both CPU-only,
+fetched from the Hugging Face hub and cached locally on first use:
+
+- **`code`** (default) — `minishlab/potion-code-16M`, tuned for source code.
+- **`text`** — `minishlab/potion-retrieval-32M`, tuned for natural-language
+  retrieval; better for prose, Markdown, and documentation.
+
+Select per invocation with `--model code|text`, or set the `SEMEJA_MODEL`
+environment variable. Any other value is treated as a Hugging Face `model2vec`
+repo name, so you can point `semeja` at your own model.
+
+A single index uses one model — query and chunk embeddings must share an
+embedding space — so pick the model that matches the corpus. For documentation
+or knowledge-base search, pair `--model text` with `--include-text-files`:
+
+```bash
+semeja search "deployment rollback procedure" ./docs --model text --include-text-files
+```
 
 ---
 

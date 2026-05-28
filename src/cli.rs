@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+use crate::embed::load_model;
 use crate::index::SemejaIndex;
 use crate::stats::{default_stats_file, format_savings_report};
 use crate::utils::{format_results, is_git_url, resolve_chunk};
@@ -81,7 +82,7 @@ fn run_search(options: &Options) -> CliOutcome {
         None => return CliOutcome::err("error: search requires a query"),
     };
     let path = options.positionals.get(1).cloned().unwrap_or_else(|| ".".to_string());
-    let index = match build_index(&path, options.include_text_files) {
+    let index = match build_index(&path, options.include_text_files, &options.model) {
         Ok(index) => index,
         Err(err) => return CliOutcome::err(err.to_string()),
     };
@@ -105,7 +106,7 @@ fn run_find_related(options: &Options) -> CliOutcome {
         None => return CliOutcome::err("error: find-related requires a line number"),
     };
     let path = options.positionals.get(2).cloned().unwrap_or_else(|| ".".to_string());
-    let index = match build_index(&path, options.include_text_files) {
+    let index = match build_index(&path, options.include_text_files, &options.model) {
         Ok(index) => index,
         Err(err) => return CliOutcome::err(err.to_string()),
     };
@@ -124,12 +125,13 @@ fn run_find_related(options: &Options) -> CliOutcome {
     }
 }
 
-/// Build an index from a local path or git URL.
-fn build_index(path: &str, include_text_files: bool) -> Result<SemejaIndex> {
+/// Build an index from a local path or git URL using the selected model.
+fn build_index(path: &str, include_text_files: bool, model: &str) -> Result<SemejaIndex> {
+    let encoder = load_model(Some(model))?;
     if is_git_url(path) {
-        SemejaIndex::from_git(path, None, None, None, include_text_files)
+        SemejaIndex::from_git(path, None, Some(encoder), None, include_text_files)
     } else {
-        SemejaIndex::from_path(Path::new(path), None, None, include_text_files)
+        SemejaIndex::from_path(Path::new(path), Some(encoder), None, include_text_files)
     }
 }
 
@@ -139,6 +141,7 @@ struct Options {
     positionals: Vec<String>,
     top_k: usize,
     mode: String,
+    model: String,
     include_text_files: bool,
     force: bool,
     verbose: bool,
@@ -150,6 +153,8 @@ impl Options {
             positionals: Vec::new(),
             top_k: 5,
             mode: "hybrid".to_string(),
+            // SEMEJA_MODEL overrides the default; "code" / "text" select presets.
+            model: std::env::var("SEMEJA_MODEL").unwrap_or_else(|_| "code".to_string()),
             include_text_files: false,
             force: false,
             verbose: false,
@@ -165,6 +170,11 @@ impl Options {
                 "-m" | "--mode" => {
                     if let Some(value) = iter.next() {
                         options.mode = value.clone();
+                    }
+                }
+                "--model" => {
+                    if let Some(value) = iter.next() {
+                        options.model = value.clone();
                     }
                 }
                 "--include-text-files" => options.include_text_files = true,
@@ -184,10 +194,13 @@ fn help_text() -> String {
         "semeja - fast and accurate code search for agents",
         "",
         "Usage:",
-        "  semeja search <query> [path] [-k N] [-m MODE]",
-        "  semeja find-related <file_path> <line> [path] [-k N]",
+        "  semeja search <query> [path] [-k N] [-m MODE] [--model code|text|<name>]",
+        "  semeja find-related <file_path> <line> [path] [-k N] [--model code|text|<name>]",
         "  semeja init [--force]",
         "  semeja savings [--verbose]",
+        "",
+        "Models: 'code' (default, for source), 'text' (for prose/docs), or any",
+        "Hugging Face model2vec name. Override the default with SEMEJA_MODEL.",
     ]
     .join("\n")
 }
