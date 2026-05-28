@@ -16,18 +16,18 @@ fn score_map(entries: &[(&Chunk, f32)]) -> ScoreMap {
 
 #[test]
 fn rerank_topk_handles_empty_no_penalty_and_saturation() {
-    assert!(rerank_topk(&ScoreMap::new(), 5, true).is_empty());
+    assert!(rerank_topk(&ScoreMap::new(), 5, true, 1).is_empty());
 
     let init_chunk = make_chunk("from .auth import authenticate", "src/semeja/__init__.py");
     let impl_chunk = make_chunk("def authenticate(token): ...", "src/semeja/auth.py");
-    let ranked = rerank_topk(&score_map(&[(&init_chunk, 2.0), (&impl_chunk, 1.0)]), 2, false);
+    let ranked = rerank_topk(&score_map(&[(&init_chunk, 2.0), (&impl_chunk, 1.0)]), 2, false, 1);
     assert_eq!(ranked[0].0, init_chunk);
 
     let saturated: Vec<Chunk> =
         (0..5).map(|i| make_chunk(&format!("def fn_{i}(): pass"), "big_file.py")).collect();
     let entries: Vec<(&Chunk, f32)> =
         saturated.iter().enumerate().map(|(i, c)| (c, (5 - i) as f32)).collect();
-    let ranked = rerank_topk(&score_map(&entries), 5, true);
+    let ranked = rerank_topk(&score_map(&entries), 5, true, 1);
     let scores: Vec<f32> = ranked.iter().map(|(_, s)| *s).collect();
     let mut sorted = scores.clone();
     sorted.sort_by(|a, b| b.total_cmp(a));
@@ -45,9 +45,27 @@ fn rerank_topk_demotes_penalised_paths() {
     ] {
         let regular = make_chunk("def impl(): pass", "src/regular.py");
         let penalised = make_chunk("def impl(): pass", penalised_path);
-        let ranked = rerank_topk(&score_map(&[(&regular, 1.0), (&penalised, 1.0)]), 2, true);
+        let ranked = rerank_topk(&score_map(&[(&regular, 1.0), (&penalised, 1.0)]), 2, true, 1);
         assert_eq!(ranked[0].0, regular, "path {penalised_path} should rank below regular");
     }
+}
+
+#[test]
+fn rerank_topk_max_per_file_controls_concentration() {
+    let first = make_chunk("def a(): pass", "src/big.py");
+    let second = make_chunk("def b(): pass", "src/big.py");
+    let other = make_chunk("def c(): pass", "src/other.py");
+    let scores = score_map(&[(&first, 1.0), (&second, 0.9), (&other, 0.6)]);
+
+    // Code default (1): the second same-file chunk is decayed below `other`.
+    let coded = rerank_topk(&scores, 3, false, 1);
+    assert_eq!(coded[0].0, first);
+    assert_eq!(coded[1].0, other, "diversity demotes the second same-file chunk");
+
+    // Unbounded (text/docs): both same-file chunks stay on top.
+    let concentrated = rerank_topk(&scores, 3, false, usize::MAX);
+    assert_eq!(concentrated[0].0, first);
+    assert_eq!(concentrated[1].0, second, "concentration keeps the second same-file chunk");
 }
 
 #[test]

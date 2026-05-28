@@ -70,6 +70,7 @@ pub fn search_hybrid(
     top_k: usize,
     alpha: Option<f32>,
     selector: Option<&[usize]>,
+    max_per_file: usize,
 ) -> Result<Vec<SearchResult>> {
     let alpha_weight = resolve_alpha(query, alpha);
 
@@ -110,7 +111,7 @@ pub fn search_hybrid(
     // Boost multi-chunk files, then query-type boosts, then rerank with penalties.
     boost_multi_chunk_files(&mut combined);
     let combined = apply_query_boost(&combined, query, chunks);
-    let ranked = rerank_topk(&combined, top_k, alpha_weight < 1.0);
+    let ranked = rerank_topk(&combined, top_k, alpha_weight < 1.0, max_per_file);
 
     Ok(ranked
         .into_iter()

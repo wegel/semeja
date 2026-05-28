@@ -52,10 +52,14 @@ semeja savings [--verbose]
   return semantically similar code elsewhere in the repo.
 - **`-t` / `--model`** — which embedding model to use: `code` (default, for
   source) or `text` (for prose/docs), or any Hugging Face `model2vec` name.
-  **`-t` is shorthand for `--model text` and also turns on
-  `--include-text-files`**, so `semeja search -t "<query>"` is all you need to
-  search docs. See [Embedding models](#embedding-models). Also settable via
-  `SEMEJA_MODEL`.
+  **`-t` is the document-search mode**: it selects the text model, turns on
+  `--include-text-files`, *and* relaxes the file-diversity penalty so multiple
+  matching sections of the same document surface. `semeja search -t "<query>"`
+  is all you need to search docs. See [Embedding models](#embedding-models).
+  Also settable via `SEMEJA_MODEL`.
+- **`--per-file N`** — how many chunks from one file may rank at full score
+  before the diversity penalty kicks in. Defaults to `1` for code (spread
+  results across files) and unbounded for `-t` (concentrate on the best file).
 - **`--include-text-files`** — also index documentation files (`.md`, `.txt`,
   `.rst`, `.yaml`, `.json`, …), which are skipped by default.
 - **`init`** — write `.claude/agents/semeja-search.md`, a Claude Code
@@ -150,12 +154,17 @@ other value is treated as a Hugging Face `model2vec` repo name, so you can
 point `semeja` at your own model.
 
 A single index uses one model — query and chunk embeddings must share an
-embedding space — so pick the model that matches the corpus. For documentation
-or knowledge-base search, `-t` selects the text model *and* indexes doc files:
+embedding space — so pick the model that matches the corpus. Code and document
+search are tuned differently: code search **spreads results across files** (a
+file-diversity penalty), while `-t` **concentrates on the best-matching file**
+so several sections of one document can all surface. `-t` rolls together the
+text model, doc-file indexing, and that ranking change:
 
 ```bash
 semeja search -t "deployment rollback procedure" ./docs
 ```
+
+Tune the spread/concentrate balance explicitly with `--per-file N`.
 
 ---
 

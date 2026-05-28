@@ -82,7 +82,7 @@ fn run_search(options: &Options) -> CliOutcome {
         None => return CliOutcome::err("error: search requires a query"),
     };
     let path = options.positionals.get(1).cloned().unwrap_or_else(|| ".".to_string());
-    let index = match build_index(&path, options.include_text_files, &options.model) {
+    let index = match build_index(&path, options) {
         Ok(index) => index,
         Err(err) => return CliOutcome::err(err.to_string()),
     };
@@ -106,7 +106,7 @@ fn run_find_related(options: &Options) -> CliOutcome {
         None => return CliOutcome::err("error: find-related requires a line number"),
     };
     let path = options.positionals.get(2).cloned().unwrap_or_else(|| ".".to_string());
-    let index = match build_index(&path, options.include_text_files, &options.model) {
+    let index = match build_index(&path, options) {
         Ok(index) => index,
         Err(err) => return CliOutcome::err(err.to_string()),
     };
@@ -125,14 +125,17 @@ fn run_find_related(options: &Options) -> CliOutcome {
     }
 }
 
-/// Build an index from a local path or git URL using the selected model.
-fn build_index(path: &str, include_text_files: bool, model: &str) -> Result<SemejaIndex> {
-    let encoder = load_model(Some(model))?;
-    if is_git_url(path) {
-        SemejaIndex::from_git(path, None, Some(encoder), None, include_text_files)
+/// Build an index from a local path or git URL using the selected model,
+/// tuned for code or document search.
+fn build_index(path: &str, options: &Options) -> Result<SemejaIndex> {
+    let encoder = load_model(Some(&options.model))?;
+    let mut index = if is_git_url(path) {
+        SemejaIndex::from_git(path, None, Some(encoder), None, options.include_text_files)?
     } else {
-        SemejaIndex::from_path(Path::new(path), Some(encoder), None, include_text_files)
-    }
+        SemejaIndex::from_path(Path::new(path), Some(encoder), None, options.include_text_files)?
+    };
+    index.set_max_per_file(options.max_per_file());
+    Ok(index)
 }
 
 // --- Argument parsing ---
@@ -142,6 +145,7 @@ struct Options {
     top_k: usize,
     mode: String,
     model: String,
+    per_file: Option<usize>,
     include_text_files: bool,
     force: bool,
     verbose: bool,
@@ -155,6 +159,7 @@ impl Options {
             mode: "hybrid".to_string(),
             // SEMEJA_MODEL overrides the default; "code" / "text" select presets.
             model: std::env::var("SEMEJA_MODEL").unwrap_or_else(|_| "code".to_string()),
+            per_file: None,
             include_text_files: false,
             force: false,
             verbose: false,
@@ -183,6 +188,11 @@ impl Options {
                     options.model = "text".to_string();
                     options.include_text_files = true;
                 }
+                "--per-file" => {
+                    if let Some(value) = iter.next().and_then(|v| v.parse().ok()) {
+                        options.per_file = Some(value);
+                    }
+                }
                 "--include-text-files" => options.include_text_files = true,
                 "--force" => options.force = true,
                 "--verbose" => options.verbose = true,
@@ -191,6 +201,13 @@ impl Options {
             }
         }
         options
+    }
+
+    /// Chunks per file kept at full score during reranking: an explicit
+    /// `--per-file` override, else unbounded for the text model (documents
+    /// concentrate answers) or 1 for code (spread results across files).
+    fn max_per_file(&self) -> usize {
+        self.per_file.unwrap_or(if self.model == "text" { usize::MAX } else { 1 })
     }
 }
 
@@ -207,7 +224,10 @@ fn help_text() -> String {
         "",
         "Models: 'code' (default, for source), 'text' (for prose/docs), or any",
         "Hugging Face model2vec name via --model. Override with SEMEJA_MODEL.",
-        "  -t  shorthand for the text model; also indexes documentation files.",
+        "  -t            text model; also indexes docs and keeps multiple",
+        "                matching sections from the same file.",
+        "  --per-file N  cap chunks per file kept at full score (default 1 for",
+        "                code, unbounded for text).",
     ]
     .join("\n")
 }

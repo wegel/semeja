@@ -20,9 +20,7 @@ const MODERATE_PENALTY: f32 = 0.5;
 /// Mild penalty: `.d.ts` declaration stubs.
 const MILD_PENALTY: f32 = 0.7;
 
-/// Chunks from the same file allowed before the saturation penalty applies.
-const FILE_SATURATION_THRESHOLD: usize = 1;
-/// Multiplicative decay per extra chunk from the same file.
+/// Multiplicative decay per extra chunk from the same file beyond the cap.
 const FILE_SATURATION_DECAY: f32 = 0.5;
 
 /// Filenames that are re-export barrels or package metadata.
@@ -68,9 +66,16 @@ static TYPE_DEFS_RE: LazyLock<Regex> =
 /// Select the top-k results, applying path penalties and file-saturation decay.
 ///
 /// When `penalise_paths` is set, test/compat/example/re-export paths are
-/// down-weighted before ranking; saturation decay reduces repeated hits from
-/// the same file.
-pub fn rerank_topk(scores: &ScoreMap, top_k: usize, penalise_paths: bool) -> Vec<(Chunk, f32)> {
+/// down-weighted before ranking. `max_per_file` chunks from one file are kept
+/// at full score; each chunk beyond that is decayed, spreading results across
+/// files. Pass a large `max_per_file` (e.g. for document search) to keep
+/// multiple sections of the same file.
+pub fn rerank_topk(
+    scores: &ScoreMap,
+    top_k: usize,
+    penalise_paths: bool,
+    max_per_file: usize,
+) -> Vec<(Chunk, f32)> {
     if scores.is_empty() {
         return Vec::new();
     }
@@ -106,8 +111,8 @@ pub fn rerank_topk(scores: &ScoreMap, top_k: usize, penalise_paths: bool) -> Vec
         }
         let already = *file_selected.get(&chunk.file_path).unwrap_or(&0);
         let mut eff_score = pen_score;
-        if already >= FILE_SATURATION_THRESHOLD {
-            let excess = already - FILE_SATURATION_THRESHOLD + 1;
+        if already >= max_per_file {
+            let excess = already - max_per_file + 1;
             eff_score *= FILE_SATURATION_DECAY.powi(excess as i32);
         }
         selected.push((eff_score, chunk.clone()));

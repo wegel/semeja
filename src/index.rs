@@ -32,6 +32,7 @@ pub struct SemejaIndex {
     file_mapping: HashMap<String, Vec<usize>>,
     language_mapping: HashMap<String, Vec<usize>>,
     stats_file: PathBuf,
+    max_per_file: usize,
 }
 
 impl SemejaIndex {
@@ -149,6 +150,7 @@ impl SemejaIndex {
                 top_k,
                 alpha,
                 selector,
+                self.max_per_file,
             )?,
         };
         save_search_stats(&results, CallType::Search, &self.file_sizes, &self.stats_file);
@@ -173,7 +175,16 @@ impl SemejaIndex {
             file_mapping,
             language_mapping,
             stats_file: default_stats_file(),
+            max_per_file: 1,
         }
+    }
+
+    /// Set how many chunks from one file may rank at full score before the
+    /// diversity penalty applies. `1` (the default) spreads results across
+    /// files for code search; a large value concentrates on the best-matching
+    /// file for document search.
+    pub fn set_max_per_file(&mut self, max_per_file: usize) {
+        self.max_per_file = max_per_file.max(1);
     }
 
     /// Build a sorted, de-duplicated selector of chunk indices for filters.

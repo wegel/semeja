@@ -76,6 +76,7 @@ fn search_hybrid_combines_and_keeps_distinct_files() {
         3,
         None,
         None,
+        1,
     )
     .expect("search");
     assert!(!results.is_empty());
@@ -91,6 +92,7 @@ fn search_hybrid_combines_and_keeps_distinct_files() {
         5,
         None,
         None,
+        1,
     )
     .expect("search");
     let locations: Vec<&str> = deduped.iter().map(|r| r.chunk.file_path.as_str()).collect();
@@ -115,7 +117,7 @@ fn search_results_carry_matching_source_labels() {
     assert!(semantic_results.iter().all(|r| r.source == SearchMode::Semantic));
 
     let hybrid_results =
-        search_hybrid("login", &model, &semantic, &bm25, &chunks, 4, None, None).expect("search");
+        search_hybrid("login", &model, &semantic, &bm25, &chunks, 4, None, None, 1).expect("search");
     assert!(!hybrid_results.is_empty());
     assert!(hybrid_results.iter().all(|r| r.source == SearchMode::Hybrid));
 }
