@@ -39,8 +39,8 @@ and caches it locally; subsequent runs are offline.
 ## CLI
 
 ```
-semeja search <query> [path] [-k N] [-m MODE] [--model NAME] [--include-text-files]
-semeja find-related <file_path> <line> [path] [-k N] [--model NAME]
+semeja search <query> [path] [-k N] [-m MODE] [-t | --model NAME] [--include-text-files]
+semeja find-related <file_path> <line> [path] [-k N] [-t | --model NAME]
 semeja init [--force]
 semeja savings [--verbose]
 ```
@@ -50,9 +50,10 @@ semeja savings [--verbose]
   (default), `semantic`, or `bm25`.
 - **`find-related`** — given a `file_path` and `line` from a prior result,
   return semantically similar code elsewhere in the repo.
-- **`--model`** — which embedding model to use: `code` (default, for source),
-  `text` (for prose/docs), or any Hugging Face `model2vec` name. See
-  [Embedding models](#embedding-models). Also settable via `SEMEJA_MODEL`.
+- **`-t` / `--model`** — which embedding model to use: `code` (default, for
+  source), `text` (for prose/docs; `-t` is shorthand for `--model text`), or
+  any Hugging Face `model2vec` name. See [Embedding models](#embedding-models).
+  Also settable via `SEMEJA_MODEL`.
 - **`--include-text-files`** — also index documentation files (`.md`, `.txt`,
   `.rst`, `.yaml`, `.json`, …), which are skipped by default.
 - **`init`** — write `.claude/agents/semeja-search.md`, a Claude Code
@@ -141,16 +142,17 @@ fetched from the Hugging Face hub and cached locally on first use:
 - **`text`** — `minishlab/potion-retrieval-32M`, tuned for natural-language
   retrieval; better for prose, Markdown, and documentation.
 
-Select per invocation with `--model code|text`, or set the `SEMEJA_MODEL`
-environment variable. Any other value is treated as a Hugging Face `model2vec`
-repo name, so you can point `semeja` at your own model.
+Select per invocation with `-t` (shorthand for `--model text`) or
+`--model code|text|<name>`, or set the `SEMEJA_MODEL` environment variable. Any
+other value is treated as a Hugging Face `model2vec` repo name, so you can
+point `semeja` at your own model.
 
 A single index uses one model — query and chunk embeddings must share an
 embedding space — so pick the model that matches the corpus. For documentation
-or knowledge-base search, pair `--model text` with `--include-text-files`:
+or knowledge-base search, pair `-t` with `--include-text-files`:
 
 ```bash
-semeja search "deployment rollback procedure" ./docs --model text --include-text-files
+semeja search "deployment rollback procedure" ./docs -t --include-text-files
 ```
 
 ---

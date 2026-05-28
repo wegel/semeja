@@ -177,6 +177,7 @@ impl Options {
                         options.model = value.clone();
                     }
                 }
+                "-t" | "--text" => options.model = "text".to_string(),
                 "--include-text-files" => options.include_text_files = true,
                 "--force" => options.force = true,
                 "--verbose" => options.verbose = true,
@@ -194,13 +195,13 @@ fn help_text() -> String {
         "semeja - fast and accurate code search for agents",
         "",
         "Usage:",
-        "  semeja search <query> [path] [-k N] [-m MODE] [--model code|text|<name>]",
-        "  semeja find-related <file_path> <line> [path] [-k N] [--model code|text|<name>]",
+        "  semeja search <query> [path] [-k N] [-m MODE] [-t | --model NAME]",
+        "  semeja find-related <file_path> <line> [path] [-k N] [-t | --model NAME]",
         "  semeja init [--force]",
         "  semeja savings [--verbose]",
         "",
-        "Models: 'code' (default, for source), 'text' (for prose/docs), or any",
-        "Hugging Face model2vec name. Override the default with SEMEJA_MODEL.",
+        "Models: 'code' (default, for source), 'text' (-t, for prose/docs), or",
+        "any Hugging Face model2vec name via --model. Override with SEMEJA_MODEL.",
     ]
     .join("\n")
 }
